@@ -173,7 +173,7 @@ export default function MiniAppPage() {
       // Mostrar éxito y cerrar
       if (tg) {
         tg.showAlert('Formulario enviado exitosamente ' + data.message, () => {
-          //tg.close();
+          tg.close();
         });
       } else {
         alert('Formulario enviado exitosamente: ' + data.message);
