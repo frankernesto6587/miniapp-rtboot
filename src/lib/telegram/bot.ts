@@ -22,6 +22,7 @@ export function createBot() {
       const msg: any = ctx.message;
     const threadId: number | undefined = msg?.message_thread_id;
     const chat = ctx.chat;
+    await ctx.deleteMessage()
 
     if (!ctx.from?.id || !ctx.chat?.id || !ctx.message?.message_thread_id) {
       await ctx.reply('No tienes permisos para usar este comando.');
@@ -36,7 +37,6 @@ export function createBot() {
     const validateData = validate.data;
    
 
-    console.log('🔍 Validate data:', validateData);
 
     //console.log('🔍 Message:', JSON.stringify(msg, null, 2));
     
@@ -59,7 +59,16 @@ export function createBot() {
     
 
     const kb = new InlineKeyboard().url('🚀 Nuevo Deposito', telegramUrl);
-    await ctx.reply('Para Agregar un nuevo deposito, abre la Mini App', { reply_markup: kb });
+    const sentMessage = await ctx.reply('Para Agregar un nuevo deposito, abre la Mini App', { reply_markup: kb });
+    
+    // Eliminar el mensaje después de 5 segundos
+    setTimeout(async () => {
+      try {
+        await ctx.api.deleteMessage(ctx.chat.id, sentMessage.message_id);
+      } catch (error) {
+        console.log('No se pudo eliminar el mensaje automáticamente:', error);
+      }
+    }, 5000);
       
     } catch (error: any) {
       console.error('Error al abrir Mini App:', error.response.data);

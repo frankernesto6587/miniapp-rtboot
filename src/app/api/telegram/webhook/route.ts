@@ -22,7 +22,6 @@ export async function POST(req: Request) {
       secretToken: WEBHOOK_SECRET, // Pasar explícitamente el secret token
     });
     const response = await handler(req);
-    console.log('📤 Response status:', response.status);
     
     if (response.status === 401) {
       // Clonar la respuesta para poder leer el body sin afectar el stream original

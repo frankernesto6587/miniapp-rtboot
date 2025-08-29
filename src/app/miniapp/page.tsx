@@ -1,6 +1,7 @@
 'use client';
 import Script from 'next/script';
 import { useEffect, useState, useRef } from 'react';
+import axios from 'axios';
 import type { StartPayload, TelegramWebApp } from '@/types/telegram';
 
 function decodeStart<T>(sp: string): T | null {
@@ -89,9 +90,19 @@ export default function MiniAppPage() {
   // Validar tipo de archivo compatible con Telegram
   const isValidImageFile = (file: File): boolean => {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    const maxSize = 10 * 1024 * 1024; // 10MB límite de Telegram
+    const maxSize = 512 * 1024; // 90KB límite para tunneling gratuito (ngrok/tunnelmole)
     
-    return validTypes.includes(file.type) && file.size <= maxSize;
+    if (!validTypes.includes(file.type)) {
+      setError('Formato de archivo no válido. Solo se permiten JPEG, PNG, GIF y WebP');
+      return false;
+    }
+    
+    if (file.size > maxSize) {
+      setError(`Archivo demasiado grande (${(file.size / 1024).toFixed(1)}KB). Máximo permitido: 512KB`);
+      return false;
+    }
+    
+    return true;
   };
 
   // Manejar selección de imagen
@@ -99,8 +110,11 @@ export default function MiniAppPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Resetear error previo
+    setError(null);
+
     if (!isValidImageFile(file)) {
-      setError('La imagen debe ser JPEG, PNG, GIF o WebP y menor a 10MB');
+      // El error ya se establece dentro de isValidImageFile
       return;
     }
 
@@ -112,7 +126,6 @@ export default function MiniAppPage() {
       setImagePreview(e.target?.result as string);
     };
     reader.readAsDataURL(file);
-    setError(null);
   };
 
   // Manejar cambios en inputs
@@ -131,7 +144,7 @@ export default function MiniAppPage() {
   // Enviar formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid() || !tg || !payload) return;
+    if (!isFormValid() || !payload) return;
 
     setIsSubmitting(true);
     try {
@@ -140,25 +153,41 @@ export default function MiniAppPage() {
       formDataToSend.append('nombre', formData.nombre);
       formDataToSend.append('monto', formData.monto);
       formDataToSend.append('code', formData.code);
-      formDataToSend.append('initData', tg.initData);
+      // Usar initData si existe, o crear uno falso para pruebas fuera de Telegram
+      formDataToSend.append('initData', tg?.initData || 'test_init_data');
       formDataToSend.append('bancoId', payload.banco.id.toString());
 
-      const res = await fetch(`${apiUrl}/miniapp/submit-form`, {
-      method: 'POST',
-        body: formDataToSend,
+      
+
+      
+
+      const response = await axios.post(`${apiUrl}/miniapp/submit-form`, formDataToSend, {
+        headers: {
+          // NO establecer Content-Type manualmente - deja que axios lo haga automáticamente con el boundary
+        },
+        timeout: 30000, // 30 segundos timeout
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Error al enviar formulario');
-      }
+      const data = response.data;
 
       // Mostrar éxito y cerrar
-      tg.showAlert('Formulario enviado exitosamente', () => {
-    tg.close();
-      });
+      if (tg) {
+        tg.showAlert('Formulario enviado exitosamente ' + data.message, () => {
+          //tg.close();
+        });
+      } else {
+        alert('Formulario enviado exitosamente: ' + data.message);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      let errorMessage = 'Error desconocido';
+      
+      if (axios.isAxiosError(err)) {
+        errorMessage = err.response?.data?.message || err.message || 'Error en la petición';
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -211,9 +240,19 @@ export default function MiniAppPage() {
                           alt="Preview" 
                           className="max-h-48 mx-auto rounded-lg object-contain"
                         />
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Toca para cambiar imagen
-                        </p>
+                        <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                          <p>Toca para cambiar imagen</p>
+                          {formData.imagen && (
+                            <div className="flex items-center justify-center space-x-4 text-xs">
+                              <span className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">
+                                📁 {(formData.imagen.size / 1024).toFixed(1)} KB
+                              </span>
+                              <span className="bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">
+                                📐 {formData.imagen.name.split('.').pop()?.toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -223,7 +262,7 @@ export default function MiniAppPage() {
                             Seleccionar imagen
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            JPEG, PNG, GIF o WebP (máx. 10MB)
+                            JPEG, PNG, GIF o WebP (máx. 90KB)
                           </p>
                         </div>
                       </div>
